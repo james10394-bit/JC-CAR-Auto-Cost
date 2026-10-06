@@ -1,4 +1,5 @@
 const asset=(path:string)=>import.meta.env.BASE_URL+path;
+import {readPackages} from './packages';
 import {normalizeRecord,parseText,Vehicle} from './cost';
 async function ocr(image:File|HTMLCanvasElement,onProgress:(s:string)=>void){
  const {createWorker}=await import('tesseract.js');
@@ -9,8 +10,8 @@ export async function extract(file:File,onProgress:(s:string)=>void):Promise<{te
  const ext=file.name.split('.').pop()?.toLowerCase();let text='';let records:Vehicle[]|undefined;
  if(['png','jpg','jpeg','webp'].includes(ext||'')){onProgress('載入繁體中文辨識，首次需較長時間…');text=await ocr(file,onProgress);}
  else if(['xlsx','xls','csv'].includes(ext||'')){
- const XLSX=await import('xlsx');const book=XLSX.read(await file.arrayBuffer(),{type:'array',cellDates:true});records=[];
- for(const name of book.SheetNames){const rows=XLSX.utils.sheet_to_json<Record<string,unknown>>(book.Sheets[name],{defval:''});text+=`${name}\n${XLSX.utils.sheet_to_csv(book.Sheets[name])}\n`;for(const row of rows){const v=normalizeRecord(row);if(v.model)records.push(v);}}
+ const XLSX=await import('xlsx');const book=XLSX.read(await file.arrayBuffer(),{type:'array',cellDates:true});records=readPackages(book);
+ for(const [sheetIndex,name] of book.SheetNames.entries()){if(book.Workbook?.Sheets?.[sheetIndex]?.Hidden)continue;const rows=XLSX.utils.sheet_to_json<Record<string,unknown>>(book.Sheets[name],{defval:''});text+=`${name}\n${XLSX.utils.sheet_to_csv(book.Sheets[name])}\n`;for(const row of rows){const v=normalizeRecord(row);if(v.model&&!records.some(x=>x.kind))records.push(v);}}
  if(!records.length)records=parseText(text);
  }else if(ext==='pdf'){
  const pdfjs=await import('pdfjs-dist');pdfjs.GlobalWorkerOptions.workerSrc=asset('pdf.worker.min.mjs');const task=pdfjs.getDocument({data:await file.arrayBuffer(),cMapUrl:asset('pdf-cmaps/'),cMapPacked:true,standardFontDataUrl:asset('pdf-fonts/')});const doc=await task.promise;

@@ -1,4 +1,5 @@
-export type Vehicle = {id:string; model:string; trim:string; year:string; bare:number|null; package:number|null; rebate:number|null; commission:number|null; quota:number|null; stock:number|null; color:string; validFrom:string; validTo:string; sourceId:string; note:string; status:'draft'|'confirmed'; createdAt?:string};
+import type {PackageInfo} from './packages';
+export type Vehicle = {id:string; kind?:'accessory-package'; packageInfo?:PackageInfo; model:string; trim:string; year:string; bare:number|null; package:number|null; rebate:number|null; commission:number|null; quota:number|null; stock:number|null; color:string; validFrom:string; validTo:string; sourceId:string; note:string; status:'draft'|'confirmed'; createdAt?:string};
 export const numericFields=['bare','package','rebate','commission','quota','stock'] as const;
 export const labels:Record<string,string>={model:'車型',trim:'等級／版本',year:'年式',bare:'空車成本',package:'套裝總成本',rebate:'原廠獎金／折讓',commission:'車貸佣金',quota:'配車額度',stock:'現有庫存',color:'車色',validFrom:'生效日',validTo:'截止日',note:'條件／備註'};
 export function blank():Vehicle{return {id:crypto.randomUUID(),model:'',trim:'',year:'',bare:null,package:null,rebate:null,commission:null,quota:null,stock:null,color:'',validFrom:'',validTo:'',sourceId:'',note:'',status:'draft'};}
