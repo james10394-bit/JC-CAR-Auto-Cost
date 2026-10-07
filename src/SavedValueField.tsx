@@ -1,0 +1,8 @@
+import {useEffect,useState} from 'react';
+export default function SavedValueField({label,value,options,onChange,type='text',placeholder='',decimal=false,max=1e9}:{label:string;value:string|number|null|undefined;options:string[];onChange:(value:string)=>void;type?:'text'|'number'|'date';placeholder?:string;decimal?:boolean;max?:number}){
+ const current=value==null?'':String(value),choices=options.includes(current)||!current?options:[current,...options];
+ const [manual,setManual]=useState(options.length===0),[text,setText]=useState(current);
+ useEffect(()=>{setText(current);},[current]);
+ useEffect(()=>{setManual(options.length===0);},[label]);
+ return <div className="saved-field"><span>{label}</span><select aria-label={label} value={manual?'__manual__':current} onChange={e=>{if(e.target.value==='__manual__'){setManual(true);return;}setManual(false);onChange(e.target.value);}}><option value="">{placeholder||'請選擇／留空'}</option>{choices.map(x=><option key={x} value={x}>{type==='number'?Number(x).toLocaleString('zh-TW',{maximumFractionDigits:6}):x}</option>)}<option value="__manual__">＋ 手動輸入新資料</option></select>{manual&&<input aria-label={`${label}（手動輸入）`} type={type==='number'?'text':type} inputMode={type==='number'?(decimal?'decimal':'numeric'):undefined} value={text} placeholder={placeholder} onFocus={()=>{if(type==='number'&&Number(text)===0)setText('');}} onBlur={()=>setText(current)} onChange={e=>{if(type!=='number'){setText(e.target.value);onChange(e.target.value);return;}const t=e.target.value.replace(/[,，]/g,'');if(!/^\d*(\.\d*)?$/.test(t)||(!decimal&&t.includes('.')))return;if(t!==''&&Number(t)>max)return;setText(t);if(t===''||Number.isFinite(Number(t)))onChange(t);}}/>}</div>;
+}
