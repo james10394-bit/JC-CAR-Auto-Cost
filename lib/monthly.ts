@@ -1,3 +1,4 @@
+import {modelKey} from './packages';
 export type MonthlyCondition={id:string;model:string;cash26:number|null;cash27:number|null;limit:number;months:number;difference:number};
 // 依使用者提供的 10/1～10/31 月通報照片逐列建立，非市場報價。
 export const monthlyConditions:MonthlyCondition[]=[
@@ -7,4 +8,33 @@ export function companyTerms(condition:MonthlyCondition,year:'26'|'27',qualified
  const listed=year==='26'?condition.cash26:condition.cash27;
  const valid=date>='2026-10-01'&&date<='2026-10-31';
  return {valid,rate:valid&&!wholesale&&listed!==null?Math.max(0,listed-(qualified?0:.5)):0,difference:valid&&!wholesale&&installment?condition.difference:0,limit:valid&&!wholesale&&installment?condition.limit:0,months:condition.months};
+}
+
+export const zeroInterestConditions=monthlyConditions.filter(x=>x.limit>0&&x.months>0);
+export function zeroInterestLabel(x:MonthlyCondition){return `${x.model} ${x.limit/10000}萬／${x.months}期 0%・補貼息 $${x.difference.toLocaleString('zh-TW')}`;}
+
+export function zeroInterestOptions(model:string,trim=''){
+ if(!model.trim())return [];
+ const text=(model+' '+trim).toUpperCase();
+ if(/PHEV|PHV|GR版|\bGR\b/.test(text))return [];
+ const hybrid=/HEV|HV|HYBRID|油電/.test(text),gas=/汽油/.test(text);
+ const options=zeroInterestConditions.filter(x=>modelKey(x.model)===modelKey(model));
+ const isHybrid=(x:MonthlyCondition)=>/HEV|HV|油電/i.test(x.model);
+ return hybrid?options.filter(isHybrid):gas||options.some(x=>!isHybrid(x))?options.filter(x=>!isHybrid(x)):options;
+}
+
+// 比對上方車型與通報條件，避免同車系不同動力套錯優惠。
+export function conditionMatchesVehicle(condition:MonthlyCondition,model:string,trim=''){
+ if(modelKey(condition.model)!==modelKey(model))return false;
+ const text=(model+' '+trim).toUpperCase(), target=condition.model.toUpperCase();
+ const power=(s:string)=>/PHEV|PHV/.test(s)?'plug-in':/HEV|HV|HYBRID|油電/.test(s)?'hybrid':/汽油/.test(s)?'gas':'';
+ const actual=power(text), expected=power(target);
+ if(actual && (actual!==expected && !(actual==='gas'&&!expected)))return false;
+ // ALTIS、CAMRY、C-CROSS 未標油電時沿用汽油版；RAV4 未標動力時不推定。
+ if(!actual && /ALTIS|CAMRY|COROLLA CROSS/.test(modelKey(model)) && expected && expected!=='gas')return false;
+ if(/GR版|\bGR\b/.test(text)!==/GR版|\bGR\b/.test(target))return false;
+ for(const variant of ['CROSSOVER','SPORT']){
+  if(modelKey(model)==='CROWN' && text.includes(variant)!==target.includes(variant) && /CROSSOVER|SPORT/.test(text))return false;
+ }
+ return true;
 }

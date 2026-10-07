@@ -1,14 +1,54 @@
 const asset=(path:string)=>import.meta.env.BASE_URL+path;
 import {readPackages} from './packages';
 import {normalizeRecord,parseText,Vehicle} from './cost';
+import {corollaCrossDmDrafts,corollaCrossUnclearDrafts} from './dm';
 async function ocr(image:File|HTMLCanvasElement,onProgress:(s:string)=>void){
  const {createWorker}=await import('tesseract.js');
  const worker=await createWorker('chi_tra',1,{workerPath:asset('ocr/worker.min.js'),corePath:asset('ocr/core'),langPath:asset('ocr/lang'),workerBlobURL:false,logger:m=>{if(m.status==='recognizing text')onProgress(`辨識文字 ${Math.round(m.progress*100)}%`);}});
  try{const {data}=await worker.recognize(image);return data.text;}finally{await worker.terminate();}
 }
+async function corollaCrossDm(image:File,onProgress:(s:string)=>void):Promise<{text:string;records:Vehicle[]}|null>{
+ const bitmap=await createImageBitmap(image);
+ try{
+  // 僅針對完整的直式 2026 特仕車規格表；其餘圖片仍走一般辨識。
+  if(bitmap.width/bitmap.height<.68||bitmap.width/bitmap.height>.78)return null;
+  const canvas=document.createElement('canvas');canvas.width=1085;canvas.height=1509;
+  const ctx=canvas.getContext('2d');if(!ctx)return null;
+  ctx.drawImage(bitmap,0,0,canvas.width,canvas.height);
+  const crop=(x:number,y:number,w:number,h:number)=>{
+   const out=document.createElement('canvas');out.width=w*5;out.height=h*5;
+   const c=out.getContext('2d')!;c.filter='grayscale(1)';c.drawImage(canvas,x,y,w,h,0,0,out.width,out.height);return out;
+  };
+  const {createWorker,PSM}=await import('tesseract.js');
+  const worker=await createWorker('eng',1,{workerPath:asset('ocr/worker.min.js'),corePath:asset('ocr/core'),langPath:asset('ocr/lang'),workerBlobURL:false});
+  try{
+   onProgress('辨識 DM 車型及價目欄位…');
+   await worker.setParameters({tessedit_pageseg_mode:PSM.SINGLE_BLOCK});
+   const header=(await worker.recognize(crop(265,45,645,135))).data.text.toUpperCase().replace(/[^A-Z0-9]/g,'');
+   if(!header.includes('COROLLA'))return null;
+   const kind=header.includes('GRSPORT')?'gr':header.includes('CROSS')&&/HEV|HEHE|18.{0,3}HE/.test(header)?'hev':null;
+   if(!kind)return null;
+   const unclear=()=>({text:'已辨識 COROLLA CROSS 2026 DM，但價格數字不夠清楚。請在下方逐筆核對空車和套裝售價。',records:corollaCrossUnclearDrafts(kind)});
+   await worker.setParameters({tessedit_pageseg_mode:PSM.SINGLE_LINE,tessedit_char_whitelist:'0123456789.'});
+   const centers=kind==='gr'?[460,625,793,960]:[389,477,564,652,740,826,913,999];
+   const prices:number[]=[];
+   for(const [i,x] of centers.entries()){
+    onProgress(`核對 DM 價格 ${i+1}／${centers.length}…`);
+    const raw=(await worker.recognize(crop(x-31,218,62,28))).data.text;
+    const number=raw.match(/(\d{2,3})\s*[.,]\s*(\d)\b/);
+    if(!number)return unclear();
+    prices.push((Number(number[1])+Number(number[2])/10)*10000);
+   }
+   const records=corollaCrossDmDrafts(kind,prices);
+   if(!records.length)return unclear();
+   const text=records.map(x=>`車型：${x.model}\n等級：${x.trim}\n年式：${x.year}\n套裝車 DM 售價：${x.dmPackagePrice?.toLocaleString('zh-TW')} 元\n空車 DM 售價：${x.dmBarePrice?.toLocaleString('zh-TW')} 元\n業務成本：待核對`).join('\n\n');
+   return {text,records};
+  }finally{await worker.terminate();}
+ }finally{bitmap.close();}
+}
 export async function extract(file:File,onProgress:(s:string)=>void):Promise<{text:string;records:Vehicle[]}>{
  const ext=file.name.split('.').pop()?.toLowerCase();let text='';let records:Vehicle[]|undefined;
- if(['png','jpg','jpeg','webp'].includes(ext||'')){onProgress('載入繁體中文辨識，首次需較長時間…');text=await ocr(file,onProgress);}
+ if(['png','jpg','jpeg','webp'].includes(ext||'')){const dm=await corollaCrossDm(file,onProgress);if(dm)return dm;onProgress('載入繁體中文辨識，首次需較長時間…');text=await ocr(file,onProgress);}
  else if(['xlsx','xls','csv'].includes(ext||'')){
  onProgress('解析 Excel 工作表與套裝價格…');
  const mod=await import('xlsx');const XLSX=mod.default??mod;

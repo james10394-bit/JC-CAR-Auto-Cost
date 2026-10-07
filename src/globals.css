@@ -18,3 +18,5 @@
 .danger-button{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid #e6a5a5;background:#fff5f5;color:#ad2424;border-radius:8px;padding:10px 14px;font-size:14px;cursor:pointer;margin:4px}.danger-button:hover{background:#ffe5e5}.danger-button:disabled{opacity:.5;cursor:wait}.delete-dialog{max-width:460px}.delete-dialog p{overflow-wrap:anywhere}.delete-dialog .editor-actions{margin-top:18px}
 
 .saved-field{display:flex;flex-direction:column;gap:8px;min-width:0}.saved-field span{font-size:14px}.saved-field select,.saved-field input{width:100%;min-width:0;padding:12px;border:1px solid #d8dfe8;border-radius:8px;background:#fff;color:inherit;font-size:16px}.saved-field select:focus,.saved-field input:focus{outline:2px solid #91a9c9;outline-offset:2px}
+
+.zero-interest-label{display:flex;flex-direction:column;gap:8px}.zero-interest-panel .cost-cards{margin-top:18px}.zero-interest-panel select{font-size:16px}
