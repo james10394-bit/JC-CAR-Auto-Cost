@@ -1,10 +1,10 @@
 import type * as XLSX from 'xlsx';
-import {blank,Vehicle} from './cost';
+import {blank,Vehicle,amount} from './cost';
 export type PackageInfo={code:string;sheet:string;items:{code:string;name:string;price:number|null}[];dealerTotal:number|null;bundlePrice:number|null;quote:number|null};
 export function modelKey(s:string){const t=s.toUpperCase().replace(/[\s_-]/g,'');if(t.includes('TOWNACEVAN'))return 'TOWN ACE VAN';if(t.includes('TOWNACE'))return 'TOWN ACE';if(t.includes('CCROSS')||t.includes('COROLLACROSS'))return 'COROLLA CROSS';if(t.includes('YCROSS')||t.includes('YARISCROSS'))return 'YARIS CROSS';if(t.includes('PHV'))return 'PRIUS PHV';if(t.includes('CSPORT')||t.includes('COROLLASPORT'))return 'COROLLA SPORT';return ['HILUX','CAMRY','ALTIS','VIOS','BZ4X','RAV4','SIENTA','PRIUS','CROWN','AURIS','YARIS'].find(m=>t.includes(m))||s.trim().toUpperCase();}
 const cell=({r,c}:{r:number;c:number})=>{let col='';for(let n=c+1;n;n=Math.floor((n-1)/26))col=String.fromCharCode(65+(n-1)%26)+col;return col+(r+1);};
 const clean=(x:unknown)=>String(x??'').replace(/\r\n/g,'\n').trim();
-const number=(x:unknown)=>typeof x==='number'&&Number.isFinite(x)&&x>=0?x:null;
+const number=(x:unknown)=>amount(x);
 export function readPackages(book:XLSX.WorkBook):Vehicle[]{
  const out:Vehicle[]=[];
  book.SheetNames.forEach((name,i)=>{
