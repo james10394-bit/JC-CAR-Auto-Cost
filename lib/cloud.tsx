@@ -11,6 +11,14 @@ async function rows(table:string){const result:any[]=[];for(let from=0;from<1000
 function validateVehicle(v:Vehicle){if(!/^[0-9a-f-]{36}$/i.test(v.id)||!['draft','confirmed'].includes(v.status))throw new Error('資料格式不正確');for(const k of numericFields){if(v[k]!==null&&(!Number.isFinite(v[k])||v[k]!<0))throw new Error('數字不得小於 0');}for(const k of ['quota','stock'] as const)if(v[k]!==null&&!Number.isInteger(v[k]))throw new Error('配額與庫存請填整數');if(v.status==='confirmed'&&!v.model.trim())throw new Error('請填寫車型');for(const date of [v.validFrom,v.validTo])if(date&&!/^\d{4}-\d{2}-\d{2}$/.test(date))throw new Error('日期格式應為 YYYY-MM-DD');if(v.validFrom&&v.validTo&&v.validTo<v.validFrom)throw new Error('截止日不可早於生效日');}
 export async function api(url:string,opts?:RequestInit):Promise<any>{
  await owner();if(url==='/api/data'&&!opts){const [v,s]=await Promise.all([rows('jc_vehicles'),rows('jc_sources')]);return {vehicles:v.map(x=>({...x.body,createdAt:x.created_at})),sources:s};}
+ if(url==='/api/data'&&opts?.method==='DELETE'){
+ const input=JSON.parse(String(opts.body));const id=input?.id;
+ if(typeof id!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id))throw new Error('請指定有效的資料編號');
+ const uid=await owner();const {data,error}=await cloud().from('jc_vehicles').delete().eq('id',id).eq('owner_id',uid).select('id');
+ if(error)throw new Error('刪除失敗，請確認登入狀態及資料存取權限');
+ if(!data?.some(x=>x.id===id))throw new Error('資料未刪除：可能已不存在或沒有刪除權限，請重新載入確認');
+ return {deletedId:id};
+ }
  if(url==='/api/data'&&opts?.method==='POST'){const v=JSON.parse(String(opts.body)) as Vehicle;validateVehicle(v);const id=await owner();const {error}=await cloud().from('jc_vehicles').upsert({id:v.id,owner_id:id,source_id:v.sourceId||null,body:v},{onConflict:'id'});if(error)throw new Error('雲端儲存失敗，請確認來源資料及資料庫設定');return {vehicle:v};}
  if(url==='/api/upload'&&opts?.method==='POST'){const file=(opts.body as FormData).get('file');if(!(file instanceof File)||!file.size||file.size>15*1024*1024)throw new Error('單檔上限 15 MB，且不可空白');const ext=file.name.split('.').pop()?.toLowerCase();if(!['pdf','png','jpg','jpeg','webp','xlsx','xls','csv','txt','eml','docx'].includes(ext||''))throw new Error('不支援這個檔案格式');const uid=await owner(),id=crypto.randomUUID(),key=`${uid}/${id}`;const {error:uploadError}=await cloud().storage.from('jc-files').upload(key,file,{contentType:file.type||'application/octet-stream',upsert:false});if(uploadError)throw new Error('檔案上傳失敗，請確認檔案儲存設定');const {error}=await cloud().from('jc_sources').insert({id,owner_id:uid,name:file.name.slice(0,240),object_key:key,type:file.type||ext});if(error){await cloud().storage.from('jc-files').remove([key]);throw new Error('來源資料保存失敗，請重試');}return {id,name:file.name};}
  throw new Error('不支援的操作');
