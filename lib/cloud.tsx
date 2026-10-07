@@ -11,6 +11,15 @@ async function rows(table:string){const result:any[]=[];for(let from=0;from<1000
 function validateVehicle(v:Vehicle){if(!/^[0-9a-f-]{36}$/i.test(v.id)||!['draft','confirmed'].includes(v.status))throw new Error('資料格式不正確');for(const k of numericFields){if(v[k]!==null&&(!Number.isFinite(v[k])||v[k]!<0))throw new Error('數字不得小於 0');}for(const k of ['dmBarePrice','dmPackagePrice'] as const){const value=v[k];if(value!=null&&(!Number.isFinite(value)||value<0))throw new Error('DM 車價不得小於 0');}for(const k of ['quota','stock'] as const)if(v[k]!==null&&!Number.isInteger(v[k]))throw new Error('配額與庫存請填整數');if(v.status==='confirmed'&&!v.model.trim())throw new Error('請填寫車型');for(const date of [v.validFrom,v.validTo])if(date&&!/^\d{4}-\d{2}-\d{2}$/.test(date))throw new Error('日期格式應為 YYYY-MM-DD');if(v.validFrom&&v.validTo&&v.validTo<v.validFrom)throw new Error('截止日不可早於生效日');}
 export async function api(url:string,opts?:RequestInit):Promise<any>{
  await owner();if(url==='/api/data'&&!opts){const [v,s]=await Promise.all([rows('jc_vehicles'),rows('jc_sources')]);return {vehicles:v.map(x=>({...x.body,createdAt:x.created_at})),sources:s};}
+ if(url==='/api/source'&&opts?.method==='DELETE'){
+ const {id}=JSON.parse(String(opts.body));if(typeof id!=='string'||!/^[0-9a-f-]{36}$/i.test(id))throw new Error('來源編號不正確');
+ const uid=await owner();const {data:source,error:findError}=await cloud().from('jc_sources').select('id,name,object_key').eq('id',id).eq('owner_id',uid).single();
+ if(findError||!source)throw new Error('找不到來源或沒有刪除權限');
+ const linked=(await rows('jc_vehicles')).filter(x=>x.owner_id===uid&&x.source_id===id);
+ for(const row of linked){const body={...row.body,sourceId:'',note:[row.body.note,`原來源：${source.name}（原檔已移除）`].filter(Boolean).join('\n')};const {error}=await cloud().from('jc_vehicles').update({source_id:null,body}).eq('id',row.id).eq('owner_id',uid);if(error)throw new Error('來源連結移除失敗，原始資料仍保留，請重試');}
+ const {error:fileError}=await cloud().storage.from('jc-files').remove([source.object_key]);if(fileError)throw new Error('原檔刪除失敗，請重試；已匯入資料仍保留');
+ const {data:deleted,error}=await cloud().from('jc_sources').delete().eq('id',id).eq('owner_id',uid).select('id');if(error||!deleted?.some(x=>x.id===id))throw new Error('來源清單刪除失敗，請重新載入後重試');return {deletedId:id};
+ }
  if(url==='/api/data'&&opts?.method==='DELETE'){
  const input=JSON.parse(String(opts.body));const id=input?.id;
  if(typeof id!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id))throw new Error('請指定有效的資料編號');
