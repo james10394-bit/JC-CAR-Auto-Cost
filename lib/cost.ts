@@ -8,15 +8,16 @@ export function effective(v:Vehicle,today=new Date().toLocaleDateString('sv-SE',
 export type Scenario={sale:number;extras:number;subsidy:number;trade:number;debt:number;down:number;rate:number;months:number;fees:number;dealerCost:number;referencePrice?:number;rebate?:number;commission?:number;rebatePercent?:number;commissionPercent?:number;companyRate?:number;financeCost?:number;promoLimit?:number;promoMonths?:number};
 export function calculate(v:Vehicle,mode:string,s:Scenario){
  const cost=mode==='package'?v.package:v.bare;
- const sale=s.sale+s.extras,net=sale-s.subsidy-s.trade+s.debt,cash=Math.min(s.down,Math.max(0,net)),principal=Math.max(0,net-cash),r=s.rate/1200,months=Math.max(1,s.months);
- const promoLimit=s.promoLimit||0,promoMonths=Math.max(1,s.promoMonths||months),promoPrincipal=Math.min(principal,promoLimit),regularPrincipal=principal-promoPrincipal;
- const regularMonthly=regularPrincipal===0?0:r===0?regularPrincipal/months:regularPrincipal*r/(1-Math.pow(1+r,-months));
- const promoMonthly=promoPrincipal/promoMonths,monthly=regularMonthly+promoMonthly,interest=regularMonthly*months-regularPrincipal;
+ // 月付僅依成交車價、頭期款、年利率與期數；其他項目獨立結算。
+ const sale=s.sale+s.extras,net=sale-s.subsidy-s.trade+s.debt;
+ const cash=Math.min(s.down,Math.max(0,s.sale)),principal=Math.max(0,s.sale-cash),r=s.rate/1200,months=Math.max(1,s.months);
+ const monthly=principal===0?0:r===0?principal/months:principal*r/(1-Math.pow(1+r,-months));
+ const interest=Math.max(0,monthly*months-principal);
  const reference=s.referencePrice??v.referencePrice??0;
  const rebate=(s.rebate??v.rebate??0)+reference*(s.rebatePercent??v.rebatePercent??0)/100;
  const commission=(s.commission??v.commission??0)+principal*(s.commissionPercent??v.commissionPercent??0)/100;
  const companySupport=reference*(s.companyRate||0)/100,financeCost=s.financeCost||0;
- return {cost,net,cash,principal,monthly,interest,total:cash+principal+interest+s.fees,refund:Math.max(0,-net),rebate,commission,companySupport,financeCost,promoPrincipal,promoMonthly,regularMonthly,promoMonths,months,profit:cost==null?null:sale+rebate+commission+companySupport-cost-s.dealerCost-financeCost};
+ return {cost,net,cash,principal,monthly,interest,total:net+interest+s.fees,refund:Math.max(0,-(net+interest+s.fees)),rebate,commission,companySupport,financeCost,months,profit:cost==null?null:sale+rebate+commission+companySupport-cost-s.dealerCost-financeCost};
 }
 
 const aliases:Record<string,string>={'車型':'model','model':'model','等級':'trim','版本':'trim','等級／版本':'trim','trim':'trim','年式':'year','year':'year','空車':'bare','空車成本':'bare','bare':'bare','套裝':'package','套裝總成本':'package','套裝成本':'package','package':'package','原廠獎金':'rebate','原廠獎金／折讓':'rebate','獎金':'rebate','折讓':'rebate','rebate':'rebate','車貸佣金':'commission','佣金':'commission','commission':'commission','配車額度':'quota','車額':'quota','配額':'quota','quota':'quota','庫存':'stock','現有庫存':'stock','stock':'stock','車色':'color','顏色':'color','color':'color','生效日':'validFrom','validfrom':'validFrom','截止日':'validTo','有效期限':'validTo','validto':'validTo','備註':'note','note':'note','原廠獎金趴數':'rebatePercent','獎金比例':'rebatePercent','獎金%':'rebatePercent','車貸佣金趴數':'commissionPercent','佣金比例':'commissionPercent','佣金%':'commissionPercent','牌價':'referencePrice','車價基準':'referencePrice'};
